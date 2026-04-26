@@ -9,7 +9,7 @@ class AgentService:
         self.prd_writing_agent = PRDWritingAgent()
         self.proof_reader_agent = ProductReaderAgent()
 
-    async def handle_task(self, product_idea: str, requirements: list):
+    async def handle_task(self, product_idea: str, requirements: list) -> dict:
         status = []
         
         status.append("Starting product research...")
