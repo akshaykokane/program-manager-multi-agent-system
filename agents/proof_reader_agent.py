@@ -22,4 +22,4 @@ class ProductReaderAgent:
         if "Issue:" in feedback:
             issue_detected = True
 
-        return feedback, issue_detected
+        return feedback.text, issue_detected
