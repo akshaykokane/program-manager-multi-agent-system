@@ -15,7 +15,7 @@ class PRDWritingAgent:
             """
         )
 
-    async def write_prd(self, product_idea: str, requirements: list) -> str:
-        task = f"Write a PRD for the following product idea: {product_idea} with these requirements: {requirements}"
+    async def write_prd(self, product_research: str, requirements: list) -> str:
+        task = f"Write a PRD for the following product research: {product_research} with these requirements: {requirements}"
         prd = await self.agent.run(task)
         return prd.text
