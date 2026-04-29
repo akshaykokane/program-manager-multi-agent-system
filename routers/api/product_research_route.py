@@ -13,7 +13,7 @@ agent_service = AgentService()
 @router.post("/product-research")
 async def product_research(request: ProductResearchRequest):
     try:
-        research_report = await agent_service.handle_task(request.product_idea, request.requirements)
+        research_report = await agent_service.product_development_workflow(request.product_idea, request.requirements)
         return {"research_report": research_report}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
