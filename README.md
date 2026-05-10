@@ -1,47 +1,68 @@
 # Program Manager Multi-Agent System
 
-A FastAPI-based multi-agent system that helps turn a product idea into a draft PRD and proofreading feedback.
+A FastAPI-based multi-agent system that turns a product idea into:
+
+- a product research report
+- a generated PRD
+- a technical feasibility review
 
 ## What It Does
 
-This project orchestrates three agents:
+This project orchestrates a 3-step workflow:
 
-- Product Research Agent: researches market trends, user needs, and competitors.
-- PRD Writing Agent: generates a Product Requirements Document from an idea and requirements.
-- Proof Reader Agent: reviews the PRD and flags quality issues.
+1. Product Research Agent
+2. PRD Writing Agent
+3. Technology Consultant Agent
 
-The orchestration happens in `AgentService`, exposed through a single HTTP endpoint.
+The workflow is built in `AgentService` and exposed through one FastAPI endpoint: `POST /product-research`.
 
 ## Project Structure
 
 ```text
 main.py
 requirements.txt
+README.md
 agents/
   __init__.py
   product_research_agent.py
   prd_writing_agent.py
-  proof_reader_agent.py
-routers/
-  api/
+  technical_consultant_agent.py
+api/
+  __init__.py
+  routers/
     product_research_route.py
 services/
+  __init__.py
   agent_service.py
+  slack_client.py
+  tavily_client.py
 ```
 
 ## Prerequisites
 
 - Python 3.10+
-- Azure OpenAI deployment configured
+- Ollama running locally (agents currently use `OllamaChatClient`)
+- Tavily API key for web research
+- Slack credentials for canvas creation and posting messages
 
 ## Environment Variables
 
-Create a `.env` file in the project root with:
+Create a `.env` file in the project root:
 
 ```env
-AZURE_OPENAI_ENDPOINT=your_endpoint
-AZURE_OPENAI_API_KEY=your_api_key
-AZURE_OPENAI_DEPLOYMENT=your_deployment_name
+# Required for product research
+TAVILY_API_KEY=your_tavily_api_key
+
+# Required for PRD writing Slack canvas
+SLACK_USER_TOKEN=your_slack_user_token
+
+# Required for technology consultant Slack canvas
+TECH_SLACK_USER_TOKEN=your_tech_slack_user_token
+TECH_SLACK_CANVAS_CHANNEL_ID=your_tech_slack_channel_id
+TECH_SLACK_WORKSPACE_ID=your_tech_slack_workspace_id
+TECH_SLACK_WORKSPACE_DOMAIN=your_tech_slack_workspace_domain
+
+# Optional (currently only read/logged in main.py)
 AZURE_OPENAI_MODEL=your_model_name
 ```
 
@@ -53,15 +74,22 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run the API
+## Run with FastAPI
+
+Start the server with Uvicorn:
 
 ```bash
-uvicorn main:app --reload
+python -m uvicorn main:app --reload
 ```
 
-Default server URL: `http://127.0.0.1:8000`
+FastAPI app URL: `http://127.0.0.1:8000`
 
-## API Endpoint
+Open interactive docs:
+
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- ReDoc: `http://127.0.0.1:8000/redoc`
+
+## API Usage
 
 ### POST `/product-research`
 
@@ -78,24 +106,26 @@ Request body:
 }
 ```
 
+Example cURL:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/product-research" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_idea": "AI assistant for student project planning",
+    "requirements": [
+      "Task timeline generation",
+      "Weekly progress dashboard",
+      "Deadline reminders"
+    ]
+  }'
+```
+
 Response shape:
 
 ```json
 {
-  "research_report": {
-    "research_product": "...",
-    "prd": "...",
-    "feedback": "...",
-    "issue_detected": false,
-    "status": [
-      "Starting product research...",
-      "Product research completed.",
-      "Starting PRD writing...",
-      "PRD writing completed.",
-      "Starting PRD proofreading...",
-      "PRD proofreading completed."
-    ]
-  }
+  "research_report": "...final workflow output..."
 }
 ```
 
@@ -103,4 +133,4 @@ Response shape:
 
 - Keep `.env` out of version control.
 - If credentials were accidentally exposed, rotate them immediately.
-- Some dependencies are pre-release/beta versions from the agent framework ecosystem.
+- Several dependencies are pre-release/beta versions from the agent framework ecosystem.

@@ -1,6 +1,8 @@
-from agent_framework import Agent, MCPStreamableHTTPTool, WorkflowContext, Executor, handler
-from agent_framework.openai import OpenAIChatClient
+import os
 import logging
+from agent_framework import Agent, WorkflowContext, Executor, handler
+from agent_framework_ollama import OllamaChatClient
+from services.slack_client import SlackCanvasClient
 
 class TechnologyConsultantExecutor(Executor):
     """Executor for technology consultation tasks"""
@@ -15,61 +17,32 @@ class TechnologyConsultantExecutor(Executor):
         
         feedback, issue_detected = await self.agent_ref.consult_technology(prd)
         
-        await ctx.send_message((feedback, issue_detected))
+        await ctx.send_message(feedback)
 
 class TechnologyConsultantAgent:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.slack_client = SlackCanvasClient(
+            token=os.getenv("TECH_SLACK_USER_TOKEN", ""),
+            channel_id=os.getenv("TECH_SLACK_CANVAS_CHANNEL_ID", ""),
+            workspace_id=os.getenv("TECH_SLACK_WORKSPACE_ID", os.getenv("SLACK_WORKSPACE_ID", "")),
+            domain=os.getenv("TECH_SLACK_WORKSPACE_DOMAIN", os.getenv("SLACK_WORKSPACE_DOMAIN", "developer-wfk8430")),
+            logger=self.logger,
+        )
 
         self.logger.info("Initializing TechnologyConsultantAgent...")
-        self.mcp_tool = MCPStreamableHTTPTool(
-            name="Drawio Diagram Generator",
-            description="""A tool to generate architecture diagrams using Draw.io. 
-            Use this tool to create visual representations of technical architectures and workflows.
-            
-            Available tool:
-            - create_diagram: Creates a diagram from draw.io XML (mxGraphModel format) or Mermaid syntax.
-              Input: { "xml": "<mxGraphModel>...</mxGraphModel>" } OR { "mermaid": "graph TD\n  A-->B" }
-              Returns: { "svg": "<svg>...</svg>", "xml": "...", "url": "..." }
-              The 'svg' field in the response contains embeddable SVG markup for the diagram.
-            
-            Always use Mermaid syntax for simplicity unless complex layout is needed.
-            For architecture diagrams, use 'graph LR' or 'graph TD' Mermaid flowcharts.
-            """,
-            url="https://mcp.draw.io/mcp",
-            load_prompts=False,
-            stream_response=False
-        )
 
         
 
         self.agent = Agent(
-            client=OpenAIChatClient(),
+            client=OllamaChatClient(),
             instructions="""You are a technology consultant agent.
                 Your task is to review the PRD document to assess technical feasibility, identify potential 
                 technical challenges, and provide recommendations for technology stack and architecture.
-
-                Use the Drawio Diagram Generator tool to create a technical architecture diagram:
-                - Call create_diagram with a Mermaid flowchart representing the system architecture from the PRD.
-                - The tool returns a JSON response with an 'svg' field containing a full SVG string.
-                - You MUST copy the COMPLETE svg string exactly as returned — do NOT summarize, truncate, 
-                or paraphrase it. Do NOT write '[SVG content is embedded]' or any placeholder.
-                - Embed the raw SVG string directly in the report with NO markdown code fences around it.
-
-                CORRECT format for the diagram section:
-                ## Technical Architecture Diagram
-                <svg xmlns="http://www.w3.org/2000/svg" ...>...</svg>
-
-                WRONG format (never do this):
-                ## Technical Architecture Diagram
-                ```xml
-                <svg>[SVG content is embedded]</svg>
-                ```
-
+                The complete PRD text is provided directly in the user message.
+                Never ask for external resources, uploads, or links.
+  
                 Structure your final report with these exact sections:
-
-                ## Technical Architecture Diagram
-                [Raw SVG string from create_diagram, no code fences, no truncation]
 
                 ## Technical Feasibility
                 [Your assessment of whether the PRD is technically feasible, with reasoning]
@@ -86,15 +59,19 @@ class TechnologyConsultantAgent:
                 Decision: Feasible / Not Feasible
                 Issue: [One-line summary, or "None"]
                 """,
-            tools=self.mcp_tool
         )
         
         # Create executor instance that references this agent
         self.consult_technology_executor = TechnologyConsultantExecutor(self)
 
     async def consult_technology(self, prd: str) -> tuple[str, bool]:
-        
-        task = f"Consult the following PRD: {prd}. Provide feedback on technical feasibility, potential technical challenges, and recommendations for technology stack and architecture."
+        self.slack_client.validate()
+
+        task = (
+            "Analyze the PRD text below and provide a technical assessment. "
+            "Use only the provided PRD content and do not request additional documents.\n\n"
+            f"PRD:\n{prd}"
+        )
         self.logger.info("Starting technology consultation for PRD: %s", prd)
 
         # MCP tools are async context managers and must be entered before running.
@@ -107,5 +84,10 @@ class TechnologyConsultantAgent:
 
         if "Issue:" in feedback.text:
             issue_detected = True
+
+        canvas_id = await self.slack_client.create_canvas("Technical Consultant Review", feedback.text)
+        canvas_url = self.slack_client.build_canvas_url(canvas_id)
+        await self.slack_client.post_message(f"Technical review canvas created: {canvas_url}")
+        self.logger.info("Created Slack canvas: %s", canvas_id)
 
         return feedback.text, issue_detected

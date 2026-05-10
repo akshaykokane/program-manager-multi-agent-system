@@ -2,7 +2,9 @@ import asyncio
 import string
 import logging
 from agent_framework import Agent, WorkflowContext, Executor, handler
-from agent_framework.openai import OpenAIChatClient
+from agent_framework_ollama import OllamaChatClient
+
+from services.tavily_client import TavilyClientHelper
 
 class ProductResearchExecutor(Executor):
     """Executor for product research tasks"""
@@ -10,6 +12,7 @@ class ProductResearchExecutor(Executor):
         super().__init__(id="product_research")
         self.agent_ref = agent_ref
         self.logger = logging.getLogger(__name__)
+
     
     @handler
     async def research_product_executor(self, product_idea: str, ctx: WorkflowContext[str]) -> None:
@@ -20,13 +23,15 @@ class ProductResearchExecutor(Executor):
 class ProductResearchAgent:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.travy_client = TavilyClientHelper()
         self.agent = Agent(
-            client = OpenAIChatClient(),
-            instructions = """You are a product research agent.
-            Your task is to conduct comprehensive research on a given product idea, market trends, and user needs. 
-            You will gather information from various sources, analyze competitors, and identify potential opportunities and challenges. 
+            client=OllamaChatClient(),
+            instructions="""You are a product research agent.
+            Your task is to conduct comprehensive research on a given product idea, market trends, and user needs.
+            You will gather information from various sources, analyze competitors, and identify potential opportunities and challenges.
             Provide insights and recommendations based on your research to help guide the product development process.
-            """
+            """,
+            tools=[self.travy_client.search],
         )   
         # Create executor instance that references this agent
         self.research_product_executor = ProductResearchExecutor(self)
